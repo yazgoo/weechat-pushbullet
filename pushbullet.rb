@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'presbeus'
 
+$presbeus = Presbeus.new(false)
 
 def send_sms(b, command, rc, out, err)
   Weechat.print(b, ">\t#{out}")
@@ -9,8 +10,7 @@ end
 
 def buffer_input_cb(data, b, input_data)
   device = Weechat.buffer_get_string(b, "localvar_device")
-  presbeus = Presbeus.new(false)
-  req = presbeus.send_sms device, data, input_data
+  req = $presbeus.send_sms device, data, input_data
   args = h(req).merge({"postfields" => req[:payload].to_s, "post" => 1})
   Weechat.print(b, ">\t#{input_data}")
   Weechat.hook_process_hashtable(
@@ -32,8 +32,7 @@ end
 def reload_thread(data, b, args)
   address = Weechat.buffer_get_string(b, "localvar_address")
   device = Weechat.buffer_get_string(b, "localvar_device")
-  presbeus = Presbeus.new(false)
-  req = presbeus.get_v2("permanents/#{device}_thread_#{address}")
+  req = $presbeus.get_v2("permanents/#{device}_thread_#{address}")
   Weechat.hook_process_hashtable(
     "url:#{req[:url]}", h(req), 120 * 1000, "load_thread", b)
   return Weechat::WEECHAT_RC_OK
@@ -62,25 +61,23 @@ def h req
 end
 
 def load_device(data, b, device)
-  presbeus = Presbeus.new(false)
-  Weechat.print('', "loading treads for device #{presbeus.default_device}")
-  req = presbeus.get_v2("permanents/#{device}_threads")
+  Weechat.print('', "loading treads for device #{$presbeus.default_device}")
+  req = $presbeus.get_v2("permanents/#{device}_threads")
   Weechat.hook_process_hashtable(
     "url:#{req[:url]}", h(req), 120 * 1000, "load_threads", device)
 end
 
 def weechat_init
-  presbeus = Presbeus.new(false)
   Weechat.register('pushbullet',
                    'PushBullet', '1.0', 'GPL3', 'Pushbullet', '', '')
   Weechat.hook_command("pb_r", "reload pushbullet tread", "", "", "", "reload_thread", "")
   Weechat.hook_command("pb_d", "load device", "", "", "", "load_device", "")
-  req = presbeus.get_v2("devices")
+  req = $presbeus.get_v2("devices")
   Weechat.hook_process_hashtable(
     "url:#{req[:url]}", h(req), 120 * 1000, "get_devices", "")
   Weechat.print('', "launch '/pb_d <device_id>' to load device")
-  if !presbeus.default_device.nil?
-    load_device(nil, nil, presbeus.default_device)
+  if !$presbeus.default_device.nil?
+    load_device(nil, nil, $presbeus.default_device)
   end
   return Weechat::WEECHAT_RC_OK
 end
