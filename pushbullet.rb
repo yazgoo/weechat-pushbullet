@@ -1,34 +1,47 @@
 require 'rubygems'
 require 'presbeus'
-# callback for data received in input
-def buffer_input_cb(data, buffer, input_data)
-  device = Weechat.buffer_get_string(b, "localvar_device")
-  Presbeus.new.send_sms device, data, input_data
-  Weechat.print(Weechat.current_buffer(), ">\t#{input_data}")
+
+
+def send_sms(b, command, rc, out, err)
+  Weechat.print(b, ">\t#{out}")
   return Weechat::WEECHAT_RC_OK
 end
 
-# callback called when buffer is closed
+def buffer_input_cb(data, b, input_data)
+  device = Weechat.buffer_get_string(b, "localvar_device")
+  presbeus = Presbeus.new(false)
+  req = presbeus.send_sms device, data, input_data
+  args = h(req).merge({"postfields" => req[:payload].to_s, "post" => 1})
+  Weechat.print(b, ">\t#{input_data}")
+  Weechat.hook_process_hashtable(
+    "url:#{req[:url]}", args, 120 * 1000, "send_sms", b)
+  return Weechat::WEECHAT_RC_OK
+end
+
 def buffer_close_cb(data, buffer)
   return Weechat::WEECHAT_RC_OK
 end
 
-def reload_thread(data, b, args)
-    begin
-      address = Weechat.buffer_get_string(b, "localvar_address")
-      device = Weechat.buffer_get_string(b, "localvar_device")
-      Presbeus.new.thread(device, address).reverse.each do |c|
-        Weechat.print(b, "#{c["direction"] == "outgoing" ? ">" : "<"}\t#{c["body"]}")
-      end
-    rescue => e
-      Weechat.print(b, "#{e}")
-    end
+def load_thread(b, command, rc, out, err)
+  JSON.parse(out)["thread"].reverse.each do |c|
+    Weechat.print(b, "#{c["direction"] == "outgoing" ? ">" : "<"}\t#{c["body"]}")
+  end
   return Weechat::WEECHAT_RC_OK
 end
 
-def load_device(data, b, device)
+def reload_thread(data, b, args)
+  address = Weechat.buffer_get_string(b, "localvar_address")
+  device = Weechat.buffer_get_string(b, "localvar_device")
+  presbeus = Presbeus.new(false)
+  req = presbeus.get_v2("permanents/#{device}_thread_#{address}")
+  Weechat.hook_process_hashtable(
+    "url:#{req[:url]}", h(req), 120 * 1000, "load_thread", b)
+  return Weechat::WEECHAT_RC_OK
+end
+
+def load_threads(device, command, rc, out, err)
   Weechat.print('', "loading device #{device}")
-  Presbeus.new.threads(device).each do |address, name|
+  JSON.parse(out)["threads"].map{|x| Presbeus.parse_thread(x)}.each do |address, name|
     Weechat.print('', "creating buffer for #{device} #{address} #{name}")
     b = Weechat.buffer_new(name, 'buffer_input_cb', name, 'buffer_close_cb', name)
     Weechat.buffer_set(b, "localvar_set_address", address)
@@ -38,18 +51,36 @@ def load_device(data, b, device)
   return Weechat::WEECHAT_RC_OK
 end
 
+def get_devices(data, command, rc, out, err)
+  Weechat.print('', "devices:")
+  JSON.parse(out)["devices"].each { |d|  Weechat.print('', "#{d["iden"]} : #{d["model"]}") }
+  return Weechat::WEECHAT_RC_OK
+end
+
+def h req
+  {"httpheader" => req[:headers].map { |a, b| "#{a}:#{b}" }.join("\n")}
+end
+
+def load_device(data, b, device)
+  presbeus = Presbeus.new(false)
+  Weechat.print('', "loading treads for device #{presbeus.default_device}")
+  req = presbeus.get_v2("permanents/#{device}_threads")
+  Weechat.hook_process_hashtable(
+    "url:#{req[:url]}", h(req), 120 * 1000, "load_threads", device)
+end
+
 def weechat_init
-  presbeus = Presbeus.new
+  presbeus = Presbeus.new(false)
   Weechat.register('pushbullet',
                    'PushBullet', '1.0', 'GPL3', 'Pushbullet', '', '')
   Weechat.hook_command("pb_r", "reload pushbullet tread", "", "", "", "reload_thread", "")
   Weechat.hook_command("pb_d", "load device", "", "", "", "load_device", "")
-  Weechat.print('', "devices:")
-  presbeus.devices.each { |d|  Weechat.print('', d.join(": ")) }
+  req = presbeus.get_v2("devices")
+  Weechat.hook_process_hashtable(
+    "url:#{req[:url]}", h(req), 120 * 1000, "get_devices", "")
   Weechat.print('', "launch '/pb_d <device_id>' to load device")
   if !presbeus.default_device.nil?
-    Weechat.print('', "loading treads for device #{presbeus.default_device}")
-    load_device nil, nil, presbeus.default_device
+    load_device(nil, nil, presbeus.default_device)
   end
   return Weechat::WEECHAT_RC_OK
 end
