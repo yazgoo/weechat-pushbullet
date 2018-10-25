@@ -1,3 +1,4 @@
+require 'rubygems'
 require 'presbeus'
 # callback for data received in input
 def buffer_input_cb(data, buffer, input_data)
@@ -38,12 +39,17 @@ def load_device(data, b, device)
 end
 
 def weechat_init
+  presbeus = Presbeus.new
   Weechat.register('pushbullet',
                    'PushBullet', '1.0', 'GPL3', 'Pushbullet', '', '')
   Weechat.hook_command("pb_r", "reload pushbullet tread", "", "", "", "reload_thread", "")
   Weechat.hook_command("pb_d", "load device", "", "", "", "load_device", "")
   Weechat.print('', "devices:")
-  Presbeus.new.devices.each { |d|  Weechat.print('', d.join(": ")) }
+  presbeus.devices.each { |d|  Weechat.print('', d.join(": ")) }
   Weechat.print('', "launch '/pb_d <device_id>' to load device")
+  if !presbeus.default_device.nil?
+    Weechat.print('', "loading treads for device #{presbeus.default_device}")
+    load_device nil, nil, presbeus.default_device
+  end
   return Weechat::WEECHAT_RC_OK
 end
