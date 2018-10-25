@@ -1,3 +1,7 @@
+# author: Olivier 'yazgoo' Abdesselam
+# license: MIT
+# home repository: https://github.com/yazgoo/weechat-pushbullet
+
 require 'rubygems'
 require 'presbeus'
 
