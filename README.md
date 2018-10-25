@@ -1,6 +1,6 @@
 # weechat-pushbullet
 
-This plugin allows to send and receive SMS with weechat, using pushbullet
+This script allows to send and receive SMS with weechat, using pushbullet
 
 # install and configure presbeus
 
@@ -8,7 +8,7 @@ This plugin allows to send and receive SMS with weechat, using pushbullet
 
 [configure presbeus](https://github.com/yazgoo/presbeus#configuring) 
 
-# install the plugin
+# install the script
 
 ```shell
 $ ln -s pushbullet.rb ~/.weechat/ruby/pushbullet.rb
