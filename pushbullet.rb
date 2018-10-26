@@ -6,6 +6,7 @@ require 'rubygems'
 require 'presbeus'
 
 $presbeus = Presbeus.new(false)
+$buffers = {}
 
 def send_sms(b, command, rc, out, err)
   Weechat.print(b, ">\t#{out}")
@@ -45,8 +46,8 @@ end
 def load_threads(device, command, rc, out, err)
   Weechat.print('', "loading device #{device}")
   JSON.parse(out)["threads"].map{|x| Presbeus.parse_thread(x)}.each do |address, name|
-    Weechat.print('', "creating buffer for #{device} #{address} #{name}")
     b = Weechat.buffer_new(name, 'buffer_input_cb', name, 'buffer_close_cb', name)
+    $buffers[address] = b
     Weechat.buffer_set(b, "localvar_set_address", address)
     Weechat.buffer_set(b, "localvar_set_device", device)
     reload_thread(nil, b, nil)
@@ -71,6 +72,22 @@ def load_device(data, b, device)
     "url:#{req[:url]}", h(req), 120 * 1000, "load_threads", device)
 end
 
+def realtime(data, command, rc, out, err)
+  Weechat.print("", "realtime: #{out}")
+  payload = JSON.parse(out)
+  if payload["type"] == "push"
+    notifications = payload["push"]["notifications"]
+    notifications.each do |push|
+      Weechat.print("", "print #{$buffers[push["thread_id"]]}, #{push["body"]}")
+      Weechat.print($buffers[push["thread_id"]], ">\t#{push["body"]}")
+    end
+  end
+  if rc.to_i >= 0
+    Weechat.print("", "realtime failed with #{rc}")
+  end
+  return Weechat::WEECHAT_RC_OK
+end
+
 def weechat_init
   Weechat.register('pushbullet',
                    'PushBullet', '1.0', 'GPL3', 'Pushbullet', '', '')
@@ -82,6 +99,8 @@ def weechat_init
   Weechat.print('', "launch '/pb_d <device_id>' to load device")
   if !$presbeus.default_device.nil?
     load_device(nil, nil, $presbeus.default_device)
+    Weechat.hook_process_hashtable("presbeus realtime_raw", 
+                                   {"buffer_flush" => "1"},0, "realtime", "")
   end
   return Weechat::WEECHAT_RC_OK
 end
