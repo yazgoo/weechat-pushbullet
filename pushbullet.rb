@@ -8,18 +8,24 @@ require 'presbeus'
 $presbeus = Presbeus.new(false)
 $buffers = {}
 
-def send_sms(b, command, rc, out, err)
-  Weechat.print(b, ">\t#{out}")
+def send_sms(data, command, rc, out, err)
+  data = JSON.parse(data)
+  b = data["b"]
+  input_data = data["input_data"]
+  Weechat.print(b, ">\t#{input_data}")
+  if rc.to_i > 0
+    Weechat.print(b, ">\tfailed sending #{input_data} (rc: #{rc})")
+  end
   return Weechat::WEECHAT_RC_OK
 end
 
 def buffer_input_cb(data, b, input_data)
   device = Weechat.buffer_get_string(b, "localvar_device")
+  input_data.force_encoding('UTF-8')
   req = $presbeus.send_sms device, data, input_data
   args = h(req).merge({"postfields" => req[:payload].to_s, "post" => 1})
-  Weechat.print(b, ">\t#{input_data}")
   Weechat.hook_process_hashtable(
-    "url:#{req[:url]}", args, 120 * 1000, "send_sms", b)
+    "url:#{req[:url]}", args, 120 * 1000, "send_sms", {b: b, input_data: input_data}.to_json)
   return Weechat::WEECHAT_RC_OK
 end
 
@@ -28,9 +34,10 @@ def buffer_close_cb(data, buffer)
 end
 
 def load_thread(b, command, rc, out, err)
-  JSON.parse(out)["thread"].reverse.each do |c|
+  payload = JSON.parse(out)
+  payload["thread"].reverse.each do |c|
     Weechat.print(b, "#{c["direction"] == "outgoing" ? ">" : "<"}\t#{c["body"]}")
-  end
+  end if payload.key?("thread")
   return Weechat::WEECHAT_RC_OK
 end
 
@@ -73,14 +80,18 @@ def load_device(data, b, device)
 end
 
 def realtime(data, command, rc, out, err)
-  Weechat.print("", "realtime: #{out}")
-  payload = JSON.parse(out)
-  if payload["type"] == "push"
-    notifications = payload["push"]["notifications"]
-    notifications.each do |push|
-      Weechat.print("", "print #{$buffers[push["thread_id"]]}, #{push["body"]}")
-      Weechat.print($buffers[push["thread_id"]], ">\t#{push["body"]}")
+  Weechat.print("", "realtime: '#{out}'")
+  begin
+    payload = JSON.parse(out)
+    if payload["type"] == "push"
+      notifications = payload["push"]["notifications"]
+      notifications.each do |push|
+        Weechat.print("", "print #{$buffers[push["thread_id"]]}, #{push["body"]}")
+        Weechat.print($buffers[push["thread_id"]], ">\t#{push["body"]}")
+      end if notifications
     end
+  rescue JSON::ParserError => e
+    Weechat.print("", "failed to decode: '#{out}' (#{e})")
   end
   if rc.to_i >= 0
     Weechat.print("", "realtime failed with #{rc}")
