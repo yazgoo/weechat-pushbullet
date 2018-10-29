@@ -28,8 +28,13 @@ def buffer_close_cb(data, buffer)
 end
 
 def load_thread(b, command, rc, out, err)
-  JSON.parse(out)["thread"].reverse.each do |c|
-    Weechat.print(b, "#{c["direction"] == "outgoing" ? ">" : "<"}\t#{c["body"]}")
+  thread = JSON.parse(out)["thread"]
+  if not thread.nil?
+    thread.reverse.each do |c|
+      Weechat.print(b, "#{c["direction"] == "outgoing" ? ">" : "<"}\t#{c["body"]}")
+    end
+  else
+    Weechat.print("", "no thread found for #{b}")
   end
   return Weechat::WEECHAT_RC_OK
 end
