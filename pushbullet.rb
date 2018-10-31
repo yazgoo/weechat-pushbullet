@@ -81,20 +81,28 @@ end
 
 def realtime(data, command, rc, out, err)
   Weechat.print("", "realtime: '#{out}'")
-  begin
-    payload = JSON.parse(out)
-    if payload["type"] == "push"
-      notifications = payload["push"]["notifications"]
-      notifications.each do |push|
-        Weechat.print("", "print #{$buffers[push["thread_id"]]}, #{push["body"]}")
-        Weechat.print($buffers[push["thread_id"]], ">\t#{push["body"]}")
-      end if notifications
+  if out != ""
+    begin
+      payload = JSON.parse(out)
+      if payload["type"] == "push"
+        notifications = payload["push"]["notifications"]
+        notifications.each do |push|
+          Weechat.print("", "print #{$buffers[push["thread_id"]]}, #{push["body"]}")
+          Weechat.print($buffers[push["thread_id"]], ">\t#{push["body"]}")
+        end if notifications
+      end
+    rescue JSON::ParserError => e
+      Weechat.print("", "failed to decode: '#{out}' (#{e})")
     end
-  rescue JSON::ParserError => e
-    Weechat.print("", "failed to decode: '#{out}' (#{e})")
+  end
+  if err != ""
+    Weechat.print("", "realtime err: #{err}")
   end
   if rc.to_i >= 0
     Weechat.print("", "realtime failed with #{rc}")
+    sleep(10)
+    Weechat.hook_process_hashtable("presbeus realtime_raw", 
+                                   {"buffer_flush" => "1"}, 0, "realtime", "")
   end
   return Weechat::WEECHAT_RC_OK
 end
@@ -111,7 +119,7 @@ def weechat_init
   if !$presbeus.default_device.nil?
     load_device(nil, nil, $presbeus.default_device)
     Weechat.hook_process_hashtable("presbeus realtime_raw", 
-                                   {"buffer_flush" => "1"},0, "realtime", "")
+                                   {"buffer_flush" => "1"}, 0, "realtime", "")
   end
   return Weechat::WEECHAT_RC_OK
 end
