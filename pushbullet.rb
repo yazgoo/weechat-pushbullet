@@ -100,7 +100,7 @@ def realtime(data, command, rc, out, err)
   end
   if rc.to_i >= 0
     Weechat.print("", "realtime failed with #{rc}")
-    sleep(10)
+    Weechat.print("", "restarting realtime")
     Weechat.hook_process_hashtable("presbeus realtime_raw", 
                                    {"buffer_flush" => "1"}, 0, "realtime", "")
   end
